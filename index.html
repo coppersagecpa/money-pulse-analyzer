@@ -8,8 +8,6 @@
 <link href="https://fonts.googleapis.com/css2?family=Alice&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script crossorigin src="https://unpkg.com/prop-types@15/prop-types.js"></script>
-<script crossorigin src="https://unpkg.com/recharts@2/umd/Recharts.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
 <script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <style>
@@ -80,6 +78,9 @@
     background: transparent;
     border: 2px solid rgba(255,255,255,0.4);
   }
+  .cs-legend { display: flex; flex-wrap: wrap; gap: 16px; font-size: 0.8rem; margin-top: 8px; }
+  .cs-legend-item { display: flex; align-items: center; gap: 6px; }
+  .cs-legend-dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
 </style>
 </head>
 <body>
@@ -101,7 +102,147 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useMemo } = React;
-const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } = Recharts;
+
+/* ---------- Self-contained SVG charts (no external chart library) ---------- */
+
+const ChartWrap = ({ children, height }) => (
+  <div style={{ width: '100%', overflowX: 'auto' }}>
+    <svg viewBox={`0 0 640 ${height}`} preserveAspectRatio="xMidYMid meet" style={{ width: '100%', height: 'auto', minWidth: 320 }}>
+      {children}
+    </svg>
+  </div>
+);
+
+const truncateLabel = (v, n = 12) => (v && v.length > n ? v.substring(0, n) + '…' : v);
+
+const SimpleBarChart = ({ data, xKey, yKey, fill, formatValue }) => {
+  const height = 260;
+  const padding = { top: 10, right: 10, bottom: 60, left: 50 };
+  const chartW = 640 - padding.left - padding.right;
+  const chartH = height - padding.top - padding.bottom;
+  const maxVal = Math.max(1, ...data.map(d => d[yKey]));
+  const barGap = 14;
+  const barW = data.length > 0 ? (chartW - barGap * (data.length - 1)) / data.length : 0;
+
+  return (
+    <ChartWrap height={height}>
+      <line x1={padding.left} y1={padding.top} x2={padding.left} y2={padding.top + chartH} stroke="#d8cbb8" />
+      <line x1={padding.left} y1={padding.top + chartH} x2={padding.left + chartW} y2={padding.top + chartH} stroke="#d8cbb8" />
+      <text x={padding.left - 8} y={padding.top + 4} textAnchor="end" fontSize="10" fill="#09423c">{formatValue(maxVal)}</text>
+      <text x={padding.left - 8} y={padding.top + chartH} textAnchor="end" fontSize="10" fill="#09423c">0</text>
+      {data.map((d, i) => {
+        const barH = (d[yKey] / maxVal) * chartH;
+        const x = padding.left + i * (barW + barGap);
+        const y = padding.top + chartH - barH;
+        return (
+          <g key={i}>
+            <rect x={x} y={y} width={barW} height={barH} fill={fill} rx="3">
+              <title>{`${d[xKey]}: ${formatValue(d[yKey])}`}</title>
+            </rect>
+            <text x={x + barW / 2} y={padding.top + chartH + 16} textAnchor="middle" fontSize="9" fill="#09423c" transform={`rotate(-35 ${x + barW / 2} ${padding.top + chartH + 16})`}>
+              {truncateLabel(d[xKey])}
+            </text>
+          </g>
+        );
+      })}
+    </ChartWrap>
+  );
+};
+
+const SimpleGroupedBarChart = ({ data, xKey, series, formatValue }) => {
+  const height = 300;
+  const padding = { top: 10, right: 10, bottom: 40, left: 55 };
+  const chartW = 640 - padding.left - padding.right;
+  const chartH = height - padding.top - padding.bottom;
+  const maxVal = Math.max(1, ...data.flatMap(d => series.map(s => d[s.key] || 0)));
+  const groupGap = 16;
+  const groupW = data.length > 0 ? (chartW - groupGap * (data.length - 1)) / data.length : 0;
+  const barW = groupW / series.length - 4;
+
+  return (
+    <div>
+      <ChartWrap height={height}>
+        <line x1={padding.left} y1={padding.top} x2={padding.left} y2={padding.top + chartH} stroke="#d8cbb8" />
+        <line x1={padding.left} y1={padding.top + chartH} x2={padding.left + chartW} y2={padding.top + chartH} stroke="#d8cbb8" />
+        <text x={padding.left - 8} y={padding.top + 4} textAnchor="end" fontSize="10" fill="#09423c">{formatValue(maxVal)}</text>
+        <text x={padding.left - 8} y={padding.top + chartH} textAnchor="end" fontSize="10" fill="#09423c">0</text>
+        {data.map((d, i) => {
+          const groupX = padding.left + i * (groupW + groupGap);
+          return (
+            <g key={i}>
+              {series.map((s, si) => {
+                const val = d[s.key] || 0;
+                const barH = (val / maxVal) * chartH;
+                const x = groupX + si * (barW + 4);
+                const y = padding.top + chartH - barH;
+                return (
+                  <rect key={si} x={x} y={y} width={barW} height={barH} fill={s.color} rx="2">
+                    <title>{`${s.name}: ${formatValue(val)}`}</title>
+                  </rect>
+                );
+              })}
+              <text x={groupX + groupW / 2} y={padding.top + chartH + 16} textAnchor="middle" fontSize="10" fill="#09423c">{d[xKey]}</text>
+            </g>
+          );
+        })}
+      </ChartWrap>
+      <div className="cs-legend">
+        {series.map((s, i) => (
+          <span key={i} className="cs-legend-item"><span className="cs-legend-dot" style={{ background: s.color }}></span>{s.name}</span>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const SimpleLineChart = ({ data, xKey, series, formatValue }) => {
+  const height = 300;
+  const padding = { top: 10, right: 10, bottom: 40, left: 55 };
+  const chartW = 640 - padding.left - padding.right;
+  const chartH = height - padding.top - padding.bottom;
+  const allVals = data.flatMap(d => series.map(s => d[s.key] || 0));
+  const maxVal = Math.max(1, ...allVals);
+  const minVal = Math.min(0, ...allVals);
+  const range = maxVal - minVal || 1;
+  const stepX = data.length > 1 ? chartW / (data.length - 1) : 0;
+
+  const yFor = (val) => padding.top + chartH - ((val - minVal) / range) * chartH;
+  const xFor = (i) => padding.left + i * stepX;
+
+  return (
+    <div>
+      <ChartWrap height={height}>
+        <line x1={padding.left} y1={padding.top} x2={padding.left} y2={padding.top + chartH} stroke="#d8cbb8" />
+        <line x1={padding.left} y1={padding.top + chartH} x2={padding.left + chartW} y2={padding.top + chartH} stroke="#d8cbb8" />
+        <text x={padding.left - 8} y={padding.top + 4} textAnchor="end" fontSize="10" fill="#09423c">{formatValue(maxVal)}</text>
+        <text x={padding.left - 8} y={padding.top + chartH} textAnchor="end" fontSize="10" fill="#09423c">{formatValue(minVal)}</text>
+        {series.map((s, si) => {
+          const points = data.map((d, i) => `${xFor(i)},${yFor(d[s.key] || 0)}`).join(' ');
+          return (
+            <g key={si}>
+              <polyline points={points} fill="none" stroke={s.color} strokeWidth="2.5" />
+              {data.map((d, i) => (
+                <circle key={i} cx={xFor(i)} cy={yFor(d[s.key] || 0)} r="3" fill={s.color}>
+                  <title>{`${s.name} — ${d[xKey]}: ${formatValue(d[s.key] || 0)}`}</title>
+                </circle>
+              ))}
+            </g>
+          );
+        })}
+        {data.map((d, i) => (
+          <text key={i} x={xFor(i)} y={padding.top + chartH + 16} textAnchor="middle" fontSize="9" fill="#09423c">{d[xKey]}</text>
+        ))}
+      </ChartWrap>
+      <div className="cs-legend">
+        {series.map((s, i) => (
+          <span key={i} className="cs-legend-item"><span className="cs-legend-dot" style={{ background: s.color }}></span>{s.name}</span>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+/* ---------- Main app ---------- */
 
 const MoneyPulseAnalyzer = () => {
   const [activeTab, setActiveTab] = useState('upload');
@@ -887,16 +1028,7 @@ const MoneyPulseAnalyzer = () => {
                 <h3 style={{ color: brand.teal, fontFamily: "'Alice', serif" }} className="text-lg font-semibold mb-4">Top 5 Expenditures</h3>
                 {topAnalysis.topExpenses.length > 0 ? (
                   <div className="space-y-4">
-                    <ResponsiveContainer width="100%" height={250}>
-                      <BarChart data={topAnalysis.topExpenses}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e0d8c8" />
-                        <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} tick={{ fontSize: 11, fill: brand.teal }}
-                               tickFormatter={(v) => v.length > 15 ? v.substring(0, 15) + '…' : v} />
-                        <YAxis tickFormatter={(v) => `${(v/1000).toFixed(1)}k`} tick={{ fill: brand.teal, fontSize: 11 }} />
-                        <Tooltip formatter={(value) => formatCurrency(value)} />
-                        <Bar dataKey="total" fill={brand.copper} />
-                      </BarChart>
-                    </ResponsiveContainer>
+                    <SimpleBarChart data={topAnalysis.topExpenses} xKey="name" yKey="total" fill={brand.copper} formatValue={formatCurrency} />
                     <div className="space-y-2">
                       {topAnalysis.topExpenses.map((e, i) => (
                         <div key={i} style={{ backgroundColor: brand.copperLight, borderLeft: `4px solid ${brand.copper}` }} className="flex justify-between items-center p-3 rounded">
@@ -919,16 +1051,7 @@ const MoneyPulseAnalyzer = () => {
                 <h3 style={{ color: brand.teal, fontFamily: "'Alice', serif" }} className="text-lg font-semibold mb-4">Top 5 Revenue Sources</h3>
                 {topAnalysis.topRevenues.length > 0 ? (
                   <div className="space-y-4">
-                    <ResponsiveContainer width="100%" height={250}>
-                      <BarChart data={topAnalysis.topRevenues}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e0d8c8" />
-                        <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} tick={{ fontSize: 11, fill: brand.teal }}
-                               tickFormatter={(v) => v.length > 15 ? v.substring(0, 15) + '…' : v} />
-                        <YAxis tickFormatter={(v) => `${(v/1000).toFixed(1)}k`} tick={{ fill: brand.teal, fontSize: 11 }} />
-                        <Tooltip formatter={(value) => formatCurrency(value)} />
-                        <Bar dataKey="total" fill={brand.turquoise} />
-                      </BarChart>
-                    </ResponsiveContainer>
+                    <SimpleBarChart data={topAnalysis.topRevenues} xKey="name" yKey="total" fill={brand.turquoise} formatValue={formatCurrency} />
                     <div className="space-y-2">
                       {topAnalysis.topRevenues.map((r, i) => (
                         <div key={i} style={{ backgroundColor: brand.tealLight, borderLeft: `4px solid ${brand.turquoise}` }} className="flex justify-between items-center p-3 rounded">
@@ -973,17 +1096,15 @@ const MoneyPulseAnalyzer = () => {
               <div style={{ backgroundColor: '#fff', borderColor: brand.copper }} className="border rounded-lg p-6">
                 <h3 style={{ color: brand.teal, fontFamily: "'Alice', serif" }} className="text-lg font-semibold mb-4">Monthly Performance</h3>
                 {monthlyData.length > 0 && (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={monthlyData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e0d8c8" />
-                      <XAxis dataKey="month" tick={{ fill: brand.teal, fontSize: 12 }} />
-                      <YAxis tick={{ fill: brand.teal, fontSize: 12 }} />
-                      <Tooltip formatter={(value) => formatCurrency(value)} />
-                      <Legend />
-                      <Bar dataKey="revenue" fill={brand.turquoise} name="Revenue" />
-                      <Bar dataKey="expenses" fill={brand.copper} name="Expenses" />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <SimpleGroupedBarChart
+                    data={monthlyData}
+                    xKey="month"
+                    series={[
+                      { key: 'revenue', color: brand.turquoise, name: 'Revenue' },
+                      { key: 'expenses', color: brand.copper, name: 'Expenses' }
+                    ]}
+                    formatValue={formatCurrency}
+                  />
                 )}
               </div>
             </div>
@@ -993,29 +1114,24 @@ const MoneyPulseAnalyzer = () => {
             <div className="space-y-6">
               <div style={{ backgroundColor: '#fff', borderColor: brand.copper }} className="border rounded-lg p-6">
                 <h3 style={{ color: brand.teal, fontFamily: "'Alice', serif" }} className="text-lg font-semibold mb-4">Cash Balance Trend</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={monthlyData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e0d8c8" />
-                    <XAxis dataKey="month" tick={{ fill: brand.teal, fontSize: 12 }} />
-                    <YAxis tick={{ fill: brand.teal, fontSize: 12 }} />
-                    <Tooltip formatter={(value) => formatCurrency(value)} />
-                    <Line type="monotone" dataKey="balance" stroke={brand.teal} strokeWidth={3} name="Balance" dot={{ fill: brand.copper }} />
-                  </LineChart>
-                </ResponsiveContainer>
+                <SimpleLineChart
+                  data={monthlyData}
+                  xKey="month"
+                  series={[{ key: 'balance', color: brand.teal, name: 'Balance' }]}
+                  formatValue={formatCurrency}
+                />
               </div>
               <div style={{ backgroundColor: '#fff', borderColor: brand.copper }} className="border rounded-lg p-6">
                 <h3 style={{ color: brand.teal, fontFamily: "'Alice', serif" }} className="text-lg font-semibold mb-4">Revenue vs Expenses</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={monthlyData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e0d8c8" />
-                    <XAxis dataKey="month" tick={{ fill: brand.teal, fontSize: 12 }} />
-                    <YAxis tick={{ fill: brand.teal, fontSize: 12 }} />
-                    <Tooltip formatter={(value) => formatCurrency(value)} />
-                    <Legend />
-                    <Line type="monotone" dataKey="revenue" stroke={brand.turquoise} strokeWidth={2} name="Revenue" />
-                    <Line type="monotone" dataKey="expenses" stroke={brand.copper} strokeWidth={2} name="Expenses" />
-                  </LineChart>
-                </ResponsiveContainer>
+                <SimpleLineChart
+                  data={monthlyData}
+                  xKey="month"
+                  series={[
+                    { key: 'revenue', color: brand.turquoise, name: 'Revenue' },
+                    { key: 'expenses', color: brand.copper, name: 'Expenses' }
+                  ]}
+                  formatValue={formatCurrency}
+                />
               </div>
             </div>
           )}
