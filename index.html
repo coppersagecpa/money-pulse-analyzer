@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Money Pulse Analyzer — Copper Sage CPA</title>
+<meta name="description" content="Know how long your money will last. A free cashflow analysis tool from Copper Sage CPA — built inside Claude for the AI Exposed: Claude Edition summit.">
+<link href="https://fonts.googleapis.com/css2?family=Alice&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/prop-types@15/prop-types.js"></script>
+<script crossorigin src="https://unpkg.com/recharts@2/umd/Recharts.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  :root {
+    --copper: #c99485;
+    --teal: #09423c;
+    --turquoise: #4A9B8E;
+    --cream: #f7f3de;
+  }
+  body { margin: 0; font-family: 'Open Sans', sans-serif; background: var(--cream); }
+  .cs-intro {
+    background: var(--teal);
+    color: var(--cream);
+    padding: 40px 24px 32px;
+    text-align: center;
+  }
+  .cs-intro h1 {
+    font-family: 'Alice', serif;
+    font-size: 2rem;
+    margin: 0 0 8px;
+  }
+  .cs-intro p {
+    max-width: 640px;
+    margin: 0 auto;
+    opacity: 0.9;
+    line-height: 1.6;
+  }
+  .cs-intro .cs-badge {
+    display: inline-block;
+    background: var(--copper);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 4px 12px;
+    border-radius: 999px;
+    margin-bottom: 14px;
+  }
+  .cs-cta {
+    background: linear-gradient(135deg, var(--teal) 0%, #0d5c54 100%);
+    color: #fff;
+    padding: 40px 24px;
+    text-align: center;
+  }
+  .cs-cta h2 {
+    font-family: 'Alice', serif;
+    font-size: 1.6rem;
+    margin: 0 0 12px;
+  }
+  .cs-cta p {
+    max-width: 560px;
+    margin: 0 auto 24px;
+    opacity: 0.88;
+    line-height: 1.6;
+  }
+  .cs-cta a.cs-btn {
+    display: inline-block;
+    background: var(--copper);
+    color: #fff;
+    text-decoration: none;
+    font-weight: 700;
+    padding: 13px 28px;
+    border-radius: 999px;
+    margin: 0 6px 10px;
+  }
+  .cs-cta a.cs-btn.secondary {
+    background: transparent;
+    border: 2px solid rgba(255,255,255,0.4);
+  }
+</style>
+</head>
+<body>
+
+<div class="cs-intro">
+  <span class="cs-badge">Free from Copper Sage CPA</span>
+  <h1>✨ Money Pulse Analyzer</h1>
+  <p>Know how long your money will last. Upload your transactions and get a real cashflow health score, burn rate, runway, and month-by-month breakdown — no spreadsheet gymnastics required. Built inside Claude, no code and no developer, for the AI Exposed: Claude Edition summit.</p>
+</div>
+
+<div id="root"></div>
+
+<div class="cs-cta">
+  <h2>Want this running every month, not just once?</h2>
+  <p>The Money Pulse Analyzer gives you a snapshot. The Finance Flow Lab gives you the ritual — a weekly Money Date and a Monthly Money Ritual under 60 minutes, so you always know where you stand.</p>
+  <a class="cs-btn" href="https://www.skool.com/level-up-ffl-challenge-4880/about" target="_blank" rel="noopener noreferrer">Join Finance Flow Lab Free →</a>
+  <a class="cs-btn secondary" href="https://coppersagecpa.com" target="_blank" rel="noopener noreferrer">Explore Copper Sage CPA</a>
+</div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useMemo } = React;
+const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } = Recharts;
+
+const MoneyPulseAnalyzer = () => {
+  const [activeTab, setActiveTab] = useState('upload');
+  const [rawData, setRawData] = useState([]);
+  const [companyName, setCompanyName] = useState('');
+  const [reportPeriod, setReportPeriod] = useState('');
+  const [fileProcessed, setFileProcessed] = useState(false);
+  const [error, setError] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [dataQualityWarnings, setDataQualityWarnings] = useState([]);
+  const [beginningBalance, setBeginningBalance] = useState('');
+  const [beginningBalanceConfirmed, setBeginningBalanceConfirmed] = useState(false);
+  const [selectedCurrency, setSelectedCurrency] = useState('USD');
+  const [showBalanceWarning, setShowBalanceWarning] = useState(false);
+  const [manualCompany, setManualCompany] = useState('');
+  const [manualPeriod, setManualPeriod] = useState('');
+  const [manualCsvData, setManualCsvData] = useState('');
+
+  const currencies = [
+    { code: 'USD', symbol: '$', name: 'US Dollar' },
+    { code: 'EUR', symbol: '€', name: 'Euro' },
+    { code: 'GBP', symbol: '£', name: 'British Pound' },
+    { code: 'CAD', symbol: 'C$', name: 'Canadian Dollar' },
+    { code: 'AUD', symbol: 'A$', name: 'Australian Dollar' },
+    { code: 'JPY', symbol: '¥', name: 'Japanese Yen' },
+    { code: 'CHF', symbol: 'CHF', name: 'Swiss Franc' },
+    { code: 'CNY', symbol: '¥', name: 'Chinese Yuan' }
+  ];
+
+  const getCurrentCurrency = () => {
+    return currencies.find(c => c.code === selectedCurrency) || currencies[0];
+  };
+
+  const parseAmount = (amountStr) => {
+    if (!amountStr || amountStr.trim() === '') return 0;
+    let cleanAmount = String(amountStr).replace(/[$€£¥,\s]/g, '');
+    const isNegative = cleanAmount.includes('(') && cleanAmount.includes(')');
+    cleanAmount = cleanAmount.replace(/[()]/g, '');
+    const hasNegativeSign = cleanAmount.startsWith('-');
+    cleanAmount = cleanAmount.replace('-', '');
+    const amount = parseFloat(cleanAmount);
+    if (isNaN(amount)) return 0;
+    return (isNegative || hasNegativeSign) ? -amount : amount;
+  };
+
+  const parseTransactionDate = (dateStr) => {
+    if (!dateStr) return null;
+    const cleanDateStr = String(dateStr).trim().replace(/"/g, '');
+    try {
+      const date = new Date(cleanDateStr);
+      if (!isNaN(date.getTime()) && date.getFullYear() > 1900 && date.getFullYear() < 2100) {
+        return date.toISOString().split('T')[0];
+      }
+    } catch (e) {}
+    return null;
+  };
+
+  const detectDateRange = (transactions) => {
+    if (!transactions || transactions.length === 0) return 'Unknown Period';
+    const dates = transactions.map(t => new Date(t.date)).filter(d => !isNaN(d.getTime()));
+    if (dates.length === 0) return 'Unknown Period';
+    const minDate = new Date(Math.min(...dates));
+    const maxDate = new Date(Math.max(...dates));
+    const formatDate = (date) => date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    return `${formatDate(minDate)} to ${formatDate(maxDate)}`;
+  };
+
+  const parseCSVData = (csvText) => {
+    try {
+      const warnings = [];
+      let transactions = [];
+      const lines = csvText.split('\n').map(line => line.trim()).filter(line => line);
+      if (lines.length === 0) throw new Error('No data found in file');
+
+      let headerRowIndex = 0;
+      let dateCol = -1, amountCol = -1, descCol = -1, grossCol = -1, debitCol = -1, creditCol = -1;
+
+      for (let i = 0; i < Math.min(10, lines.length); i++) {
+        const line = lines[i].toLowerCase();
+        if (line.includes('date') || line.includes('amount') || line.includes('description') || line.includes('gross')) {
+          headerRowIndex = i;
+          const headers = lines[i].split(',').map(h => h.trim().toLowerCase());
+          headers.forEach((header, idx) => {
+            if (header.includes('date')) dateCol = idx;
+            if (header.includes('amount')) amountCol = idx;
+            if (header.includes('description') || header.includes('desc')) descCol = idx;
+            if (header.includes('gross')) grossCol = idx;
+            if (header.includes('debit')) debitCol = idx;
+            if (header.includes('credit')) creditCol = idx;
+          });
+          break;
+        }
+      }
+
+      if (dateCol === -1) {
+        dateCol = 0;
+        if (amountCol === -1 && grossCol === -1) {
+          amountCol = lines[0].split(',').length > 2 ? 2 : 1;
+        }
+      }
+
+      warnings.push(`Processing ${lines.length - headerRowIndex - 1} data rows`);
+
+      for (let i = headerRowIndex + 1; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line || line.length < 3) continue;
+
+        const parts = [];
+        let current = '';
+        let inQuotes = false;
+        for (let j = 0; j < line.length; j++) {
+          const char = line[j];
+          if (char === '"') {
+            inQuotes = !inQuotes;
+          } else if (char === ',' && !inQuotes) {
+            parts.push(current.trim());
+            current = '';
+          } else {
+            current += char;
+          }
+        }
+        parts.push(current.trim());
+
+        const dateStr = parts[dateCol] || '';
+        const transactionDate = parseTransactionDate(dateStr);
+        if (!transactionDate) continue;
+
+        let amount = 0;
+        if (grossCol >= 0 && parts[grossCol]) {
+          amount = parseAmount(parts[grossCol]);
+        } else if (amountCol >= 0 && parts[amountCol]) {
+          amount = parseAmount(parts[amountCol]);
+        } else if (debitCol >= 0 && creditCol >= 0) {
+          const debit = parseAmount(parts[debitCol]) || 0;
+          const credit = parseAmount(parts[creditCol]) || 0;
+          amount = credit - debit;
+        } else {
+          for (let j = 0; j < parts.length; j++) {
+            if (j !== dateCol) {
+              const val = parseAmount(parts[j]);
+              if (val !== 0) {
+                amount = val;
+                break;
+              }
+            }
+          }
+        }
+
+        if (amount === 0 || Math.abs(amount) < 0.01) continue;
+
+        let description = '';
+        if (descCol >= 0) {
+          description = parts[descCol] || '';
+        } else {
+          description = parts.filter((p, idx) => idx !== dateCol && idx !== amountCol && idx !== grossCol).join(' ');
+        }
+
+        transactions.push({
+          date: transactionDate,
+          type: amount >= 0 ? 'Revenue' : 'Expense',
+          amount: amount,
+          description: description.substring(0, 100),
+          originalRow: i + 1
+        });
+      }
+
+      transactions.sort((a, b) => new Date(a.date) - new Date(b.date));
+      warnings.push(`Successfully parsed ${transactions.length} transactions`);
+
+      if (transactions.length > 0) {
+        const totalRevenue = transactions.filter(t => t.amount > 0).reduce((sum, t) => sum + t.amount, 0);
+        const totalExpenses = transactions.filter(t => t.amount < 0).reduce((sum, t) => sum + Math.abs(t.amount), 0);
+        warnings.push(`Total revenue: $${totalRevenue.toFixed(2)}, Total expenses: $${totalExpenses.toFixed(2)}`);
+      }
+
+      return {
+        transactions,
+        companyName: 'Imported Data',
+        reportPeriod: detectDateRange(transactions),
+        warnings
+      };
+    } catch (err) {
+      throw new Error('Failed to parse CSV data: ' + err.message);
+    }
+  };
+
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    setError('');
+    setIsProcessing(true);
+    setDataQualityWarnings([]);
+
+    try {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const csvText = e.target.result;
+          const { transactions, companyName: parsedCompany, reportPeriod: parsedPeriod, warnings } = parseCSVData(csvText);
+          if (transactions.length === 0) {
+            setError('No valid transactions found in the file. Please check the format.');
+            return;
+          }
+          setRawData(transactions);
+          setCompanyName(parsedCompany);
+          setReportPeriod(parsedPeriod);
+          setDataQualityWarnings(warnings || []);
+          setFileProcessed(true);
+        } catch (err) {
+          setError('Error processing file: ' + err.message);
+        } finally {
+          setIsProcessing(false);
+        }
+      };
+      reader.onerror = () => {
+        setError('Error reading file. Please try again.');
+        setIsProcessing(false);
+      };
+      reader.readAsText(file);
+    } catch (err) {
+      setError('Error processing file: ' + err.message);
+      setIsProcessing(false);
+    }
+  };
+
+  const handleManualInput = () => {
+    if (!manualCsvData) {
+      setError('Please enter CSV data');
+      return;
+    }
+    setIsProcessing(true);
+    setDataQualityWarnings([]);
+    try {
+      setError('');
+      const { transactions, warnings } = parseCSVData(manualCsvData);
+      if (transactions.length === 0) {
+        setError('No valid transactions found. Please check the format.');
+        return;
+      }
+      setRawData(transactions);
+      setCompanyName(manualCompany || 'Manual Entry Company');
+      setReportPeriod(manualPeriod || detectDateRange(transactions));
+      setDataQualityWarnings(warnings || []);
+      setFileProcessed(true);
+      setManualCompany('');
+      setManualPeriod('');
+      setManualCsvData('');
+    } catch (err) {
+      setError('Error processing data: ' + err.message);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleBalanceConfirmation = () => {
+    const balanceValue = parseFloat(beginningBalance) || 0;
+    if (balanceValue < 0) {
+      setShowBalanceWarning(true);
+      return;
+    }
+    setBeginningBalanceConfirmed(true);
+    setActiveTab('overview');
+  };
+
+  const confirmNegativeBalance = () => {
+    setShowBalanceWarning(false);
+    setBeginningBalanceConfirmed(true);
+    setActiveTab('overview');
+  };
+
+  const skipBalanceConfirmation = () => {
+    setBeginningBalance('0');
+    setBeginningBalanceConfirmed(true);
+    setActiveTab('overview');
+  };
+
+  const monthlyData = useMemo(() => {
+    if (!rawData.length || !beginningBalanceConfirmed) return [];
+    const months = {};
+    let runningBalance = parseFloat(beginningBalance) || 0;
+    const sortedTransactions = [...rawData].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    sortedTransactions.forEach((transaction) => {
+      const date = new Date(transaction.date);
+      if (isNaN(date.getTime())) return;
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const monthName = date.toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
+
+      if (!months[monthKey]) {
+        months[monthKey] = {
+          month: monthName,
+          monthKey: monthKey,
+          revenue: 0,
+          expenses: 0,
+          netFlow: 0,
+          balance: runningBalance,
+          transactionCount: 0,
+          averageTransaction: 0,
+          startingBalance: runningBalance
+        };
+      }
+
+      if (transaction.amount > 0) {
+        months[monthKey].revenue += transaction.amount;
+      } else {
+        months[monthKey].expenses += Math.abs(transaction.amount);
+      }
+
+      months[monthKey].transactionCount++;
+      runningBalance += transaction.amount;
+      months[monthKey].balance = runningBalance;
+    });
+
+    return Object.values(months)
+      .sort((a, b) => a.monthKey.localeCompare(b.monthKey))
+      .map((month, index, array) => ({
+        ...month,
+        netFlow: month.revenue - month.expenses,
+        averageTransaction: month.transactionCount > 0 ? (month.revenue + month.expenses) / month.transactionCount : 0,
+        growthRate: index > 0 && array[index - 1].revenue > 0 ? ((month.revenue - array[index - 1].revenue) / array[index - 1].revenue) * 100 : 0
+      }));
+  }, [rawData, beginningBalance, beginningBalanceConfirmed]);
+
+  const topAnalysis = useMemo(() => {
+    if (!rawData.length) return { topExpenses: [], topRevenues: [] };
+    const expenseMap = {};
+    const revenueMap = {};
+
+    rawData.forEach(t => {
+      const desc = t.description || 'Unknown';
+      const key = desc.trim().toLowerCase().substring(0, 50);
+
+      if (t.amount < 0) {
+        if (!expenseMap[key]) {
+          expenseMap[key] = { description: desc.substring(0, 30), total: 0, count: 0, avgAmount: 0 };
+        }
+        expenseMap[key].total += Math.abs(t.amount);
+        expenseMap[key].count += 1;
+      } else if (t.amount > 0) {
+        if (!revenueMap[key]) {
+          revenueMap[key] = { description: desc.substring(0, 30), total: 0, count: 0, avgAmount: 0 };
+        }
+        revenueMap[key].total += t.amount;
+        revenueMap[key].count += 1;
+      }
+    });
+
+    const expenseArray = Object.values(expenseMap);
+    const revenueArray = Object.values(revenueMap);
+
+    expenseArray.forEach(item => { item.avgAmount = item.total / item.count; });
+    revenueArray.forEach(item => { item.avgAmount = item.total / item.count; });
+
+    const topExpenses = expenseArray
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 5)
+      .map((item, index) => ({ ...item, id: index + 1, name: item.description }));
+
+    const topRevenues = revenueArray
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 5)
+      .map((item, index) => ({ ...item, id: index + 1, name: item.description }));
+
+    return { topExpenses, topRevenues };
+  }, [rawData]);
+
+  const metrics = useMemo(() => {
+    if (!rawData.length || !beginningBalanceConfirmed) return {};
+    const totalRevenue = rawData.filter(t => t.amount > 0).reduce((sum, t) => sum + t.amount, 0);
+    const totalExpenses = rawData.filter(t => t.amount < 0).reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    const netCashFlow = totalRevenue - totalExpenses;
+    const currentBalance = monthlyData[monthlyData.length - 1]?.balance || parseFloat(beginningBalance) || 0;
+
+    const validMonths = monthlyData.filter(m => m.revenue > 0 || m.expenses > 0);
+    const avgMonthlyRevenue = validMonths.length > 0 ? totalRevenue / validMonths.length : 0;
+    const avgMonthlyExpenses = validMonths.length > 0 ? totalExpenses / validMonths.length : 0;
+    const avgMonthlyNetFlow = avgMonthlyRevenue - avgMonthlyExpenses;
+
+    const burnRate = avgMonthlyNetFlow < 0 ? Math.abs(avgMonthlyNetFlow) : 0;
+
+    let runway = 0;
+    if (avgMonthlyExpenses > 0) {
+      if (currentBalance > 0) {
+        runway = currentBalance / avgMonthlyExpenses;
+      }
+    }
+
+    const monthlyNetFlows = validMonths.map(m => m.netFlow);
+    const netFlowStdDev = monthlyNetFlows.length > 1 ?
+      Math.sqrt(monthlyNetFlows.reduce((sum, flow) => sum + Math.pow(flow - avgMonthlyNetFlow, 2), 0) / monthlyNetFlows.length) : 0;
+    const volatility = avgMonthlyNetFlow !== 0 ? (netFlowStdDev / Math.abs(avgMonthlyNetFlow)) * 100 : 0;
+
+    const workingCapitalRatio = avgMonthlyExpenses > 0 ? currentBalance / avgMonthlyExpenses : 0;
+    const cashConversionEfficiency = totalRevenue > 0 ? (netCashFlow / totalRevenue) * 100 : 0;
+
+    let revenueGrowthRate = 0;
+    if (validMonths.length >= 2) {
+      const firstMonthRevenue = validMonths[0].revenue || 1;
+      const lastMonthRevenue = validMonths[validMonths.length - 1].revenue || 1;
+      revenueGrowthRate = ((lastMonthRevenue - firstMonthRevenue) / firstMonthRevenue) * 100;
+    }
+
+    const liquidityScore = Math.min(100, Math.max(0,
+      currentBalance >= 0 ?
+        (currentBalance / Math.max(avgMonthlyExpenses * 3, 1000)) * 100 :
+        Math.max(0, (100 + (currentBalance / 1000)))
+    ));
+
+    const stabilityScore = validMonths.length > 0 ?
+      Math.min(100, Math.max(0,
+        (validMonths.filter(m => m.netFlow >= 0).length / validMonths.length) * 100 -
+        Math.min(30, volatility)
+      )) : 0;
+
+    const runwayScore = Math.min(100, Math.max(0,
+      runway > 0 ? Math.min(100, (runway / 6) * 100) : 0
+    ));
+
+    const finalScore = Math.round(liquidityScore * 0.4 + stabilityScore * 0.3 + runwayScore * 0.3);
+
+    const recentTrend = validMonths.length >= 3 ?
+      validMonths.slice(-3).reduce((sum, m) => sum + m.netFlow, 0) / 3 : avgMonthlyNetFlow;
+
+    return {
+      totalRevenue,
+      totalExpenses,
+      netCashFlow,
+      currentBalance,
+      avgMonthlyRevenue,
+      avgMonthlyExpenses,
+      avgMonthlyNetFlow,
+      runway,
+      burnRate,
+      workingCapitalRatio,
+      cashConversionEfficiency,
+      revenueGrowthRate,
+      volatility: Math.round(volatility * 10) / 10,
+      liquidityScore: Math.round(liquidityScore),
+      stabilityScore: Math.round(stabilityScore),
+      runwayScore: Math.round(runwayScore),
+      finalScore,
+      recentTrend,
+      projectedBalance3Month: currentBalance + (recentTrend * 3),
+      projectedBalance6Month: currentBalance + (recentTrend * 6)
+    };
+  }, [rawData, monthlyData, beginningBalance, beginningBalanceConfirmed]);
+
+  const getScoreLabel = (score) => {
+    if (score >= 80) return 'Excellent';
+    if (score >= 60) return 'Good';
+    if (score >= 40) return 'Fair';
+    return 'Poor';
+  };
+
+  const formatCurrency = (amount) => {
+    const currency = getCurrentCurrency();
+    if (currency.code === 'JPY') {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: currency.code,
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+      }).format(amount);
+    }
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currency.code
+    }).format(amount);
+  };
+
+  const brand = {
+    copper: '#c99485',
+    teal: '#09423c',
+    turquoise: '#4A9B8E',
+    cream: '#f7f3de',
+    copperLight: '#f0e0db',
+    tealLight: '#e6efee',
+  };
+
+  const TabButton = ({ id, label, active, onClick }) => (
+    <button
+      onClick={() => onClick(id)}
+      style={{
+        backgroundColor: active ? brand.teal : brand.cream,
+        color: active ? '#fff' : brand.teal,
+        border: `1px solid ${active ? brand.teal : brand.copper}`,
+      }}
+      className="px-4 py-2 font-medium rounded-lg transition-colors hover:opacity-90"
+    >
+      {label}
+    </button>
+  );
+
+  const resetData = () => {
+    setRawData([]);
+    setCompanyName('');
+    setReportPeriod('');
+    setFileProcessed(false);
+    setError('');
+    setIsProcessing(false);
+    setDataQualityWarnings([]);
+    setBeginningBalance('');
+    setBeginningBalanceConfirmed(false);
+    setShowBalanceWarning(false);
+    setActiveTab('upload');
+  };
+
+  return (
+    <div style={{ backgroundColor: brand.cream, fontFamily: "'Open Sans', sans-serif" }} className="min-h-screen">
+
+    <div style={{ backgroundColor: brand.teal }} className="px-6 py-5 mb-0">
+      <div className="max-w-7xl mx-auto flex items-center justify-between">
+        <div>
+          <h1 style={{ fontFamily: "'Alice', serif", color: brand.cream }} className="text-3xl font-bold mb-1">
+            Money Pulse Analyzer
+          </h1>
+          <p style={{ color: brand.copper }} className="text-sm">
+            Copper Sage CPA · Know How Long Your Money Will Last
+          </p>
+        </div>
+        <div style={{ color: brand.cream, fontSize: 36 }}>⟁</div>
+      </div>
+    </div>
+
+    <div className="p-6 max-w-7xl mx-auto">
+      <div className="mb-8">
+        <div className="flex flex-col md:flex-row md:items-center justify-between mb-4">
+          <div>
+            <p style={{ color: brand.teal }} className="text-sm mt-1">Upload your financial data for comprehensive cashflow insights</p>
+          </div>
+
+          <div className="mt-4 md:mt-0">
+            <label style={{ color: brand.teal }} className="block text-sm font-medium mb-2">
+              Currency
+            </label>
+            <select
+              value={selectedCurrency}
+              onChange={(e) => setSelectedCurrency(e.target.value)}
+              style={{ borderColor: brand.copper, color: brand.teal, backgroundColor: brand.cream }}
+              className="px-3 py-2 border rounded-lg focus:ring-2 bg-white"
+            >
+              {currencies.map(currency => (
+                <option key={currency.code} value={currency.code}>
+                  {currency.symbol} {currency.name} ({currency.code})
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {fileProcessed && (
+          <div className="mt-4 flex items-center justify-between">
+            <div>
+              <p className="font-medium text-gray-900">{companyName}</p>
+              <p className="text-sm text-gray-600">{reportPeriod}</p>
+              {!beginningBalanceConfirmed && (
+                <p className="text-sm text-blue-600 font-medium">Please confirm beginning balance below</p>
+              )}
+            </div>
+            <button
+              onClick={resetData}
+              style={{ backgroundColor: brand.copper, color: '#fff' }}
+              className="px-4 py-2 rounded-lg hover:opacity-90 transition-colors"
+            >
+              Upload New Data
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-wrap gap-2 mb-6">
+        <TabButton id="upload" label="Upload Data" active={activeTab === 'upload'} onClick={setActiveTab} />
+        {fileProcessed && beginningBalanceConfirmed && (
+          <>
+            <TabButton id="overview" label="Overview" active={activeTab === 'overview'} onClick={setActiveTab} />
+            <TabButton id="analytics" label="Analytics" active={activeTab === 'analytics'} onClick={setActiveTab} />
+            <TabButton id="trends" label="Trends" active={activeTab === 'trends'} onClick={setActiveTab} />
+            <TabButton id="recommendations" label="Recommendations" active={activeTab === 'recommendations'} onClick={setActiveTab} />
+          </>
+        )}
+      </div>
+
+      {activeTab === 'upload' && (
+        <div className="space-y-8">
+          {showBalanceWarning && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-lg p-6 max-w-md mx-4">
+                <h3 className="text-lg font-semibold text-red-800 mb-3">Negative Beginning Balance</h3>
+                <p className="text-red-700 mb-4">
+                  You entered a negative balance of {formatCurrency(parseFloat(beginningBalance))}.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={confirmNegativeBalance}
+                    className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                  >
+                    Confirm
+                  </button>
+                  <button
+                    onClick={() => setShowBalanceWarning(false)}
+                    className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                  >
+                    Edit
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {fileProcessed && !beginningBalanceConfirmed && (
+            <div style={{ backgroundColor: brand.tealLight, borderColor: brand.teal }} className="border-2 rounded-lg p-6">
+              <h3 style={{ color: brand.teal, fontFamily: "'Alice', serif" }} className="font-semibold text-lg mb-4">Confirm Beginning Cash Balance</h3>
+              <p style={{ color: brand.turquoise }} className="text-sm mb-4">
+                Enter your starting cash balance for: <strong>{reportPeriod}</strong>
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 items-end">
+                <div className="flex-1">
+                  <label style={{ color: brand.teal }} className="block text-sm font-medium mb-2">
+                    Beginning Balance ({getCurrentCurrency().symbol})
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={beginningBalance}
+                    onChange={(e) => setBeginningBalance(e.target.value)}
+                    style={{ borderColor: brand.copper }}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none"
+                    placeholder="10000.00"
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <button onClick={handleBalanceConfirmation} style={{ backgroundColor: brand.teal, color: brand.cream }} className="px-6 py-2 rounded-lg hover:opacity-90 whitespace-nowrap font-semibold">
+                    Confirm
+                  </button>
+                  <button onClick={skipBalanceConfirmation} style={{ backgroundColor: brand.copper, color: '#fff' }} className="px-6 py-2 rounded-lg hover:opacity-90 whitespace-nowrap">
+                    Use $0
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div style={{ borderColor: brand.copper, backgroundColor: '#fff' }} className="border-2 border-dashed rounded-lg p-8 text-center">
+            <h3 style={{ color: brand.teal, fontFamily: "'Alice', serif" }} className="text-lg font-semibold mb-4">Upload Financial Data</h3>
+            <div className="space-y-4">
+              <input
+                type="file"
+                accept=".csv"
+                onChange={handleFileUpload}
+                disabled={isProcessing}
+                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-teal-800 hover:file:bg-orange-100 disabled:opacity-50"
+              />
+              <p style={{ color: brand.turquoise }} className="text-sm">
+                {isProcessing ? 'Processing...' : 'Upload your CSV file with transaction data'}
+              </p>
+            </div>
+          </div>
+
+          <div style={{ backgroundColor: brand.tealLight, borderColor: brand.turquoise }} className="border rounded-lg p-6">
+            <h3 style={{ color: brand.teal, fontFamily: "'Alice', serif" }} className="text-lg font-semibold mb-4">Or Enter Data Manually</h3>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label style={{ color: brand.teal }} className="block text-sm font-medium mb-2">Company Name</label>
+                  <input
+                    type="text"
+                    value={manualCompany}
+                    onChange={(e) => setManualCompany(e.target.value)}
+                    style={{ borderColor: brand.copper, backgroundColor: '#fff', color: brand.teal }}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none"
+                    placeholder="Your Company Name"
+                  />
+                </div>
+                <div>
+                  <label style={{ color: brand.teal }} className="block text-sm font-medium mb-2">Report Period</label>
+                  <input
+                    type="text"
+                    value={manualPeriod}
+                    onChange={(e) => setManualPeriod(e.target.value)}
+                    style={{ borderColor: brand.copper, backgroundColor: '#fff', color: brand.teal }}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none"
+                    placeholder="e.g., Jan 2024 to Dec 2024"
+                  />
+                </div>
+              </div>
+              <div>
+                <label style={{ color: brand.teal }} className="block text-sm font-medium mb-2">CSV Data</label>
+                <textarea
+                  value={manualCsvData}
+                  onChange={(e) => setManualCsvData(e.target.value)}
+                  rows="10"
+                  style={{ borderColor: brand.copper, backgroundColor: '#fff', color: brand.teal }}
+                  className="w-full px-3 py-2 border rounded-lg font-mono text-sm focus:outline-none"
+                  placeholder={"Date,Description,Amount\n2024-08-31,Client Payment,5000.00\n2024-08-31,Office Rent,-1200.00"}
+                ></textarea>
+              </div>
+              <button
+                onClick={handleManualInput}
+                disabled={isProcessing}
+                style={{ backgroundColor: brand.teal, color: brand.cream }}
+                className="w-full py-2 px-4 rounded-lg hover:opacity-90 disabled:opacity-50 font-semibold"
+              >
+                {isProcessing ? 'Processing...' : 'Process Data'}
+              </button>
+            </div>
+          </div>
+
+          {dataQualityWarnings.length > 0 && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <div className="text-yellow-800 font-medium mb-2">Processing Info:</div>
+              <ul className="text-yellow-700 text-sm space-y-1">
+                {dataQualityWarnings.map((warning, index) => (
+                  <li key={index}>• {warning}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="text-red-800 font-medium">Error:</div>
+              <div className="text-red-700 text-sm">{error}</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {fileProcessed && beginningBalanceConfirmed && metrics.finalScore !== undefined && (
+        <>
+          {(activeTab === 'overview' || activeTab === 'analytics' || activeTab === 'trends' || activeTab === 'recommendations') && (
+            <div style={{ background: `linear-gradient(135deg, ${brand.teal}, ${brand.turquoise})` }} className="rounded-xl p-6 text-white mb-8">
+              <p style={{ fontFamily: "'Alice', serif", color: brand.cream }} className="text-center text-xs uppercase tracking-widest mb-4 opacity-75">Financial Health Score</p>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div className="text-center">
+                  <div style={{ color: brand.copper }} className="text-5xl font-bold mb-1">{metrics.finalScore}</div>
+                  <div style={{ color: brand.cream }} className="text-xl font-medium">{getScoreLabel(metrics.finalScore)}</div>
+                  <div className="text-sm opacity-75" style={{ color: brand.cream }}>Overall Score</div>
+                </div>
+                <div className="text-center">
+                  <div style={{ color: brand.copper }} className="text-3xl font-bold mb-1">{metrics.liquidityScore}</div>
+                  <div style={{ color: brand.cream }} className="text-sm font-medium">Liquidity (40%)</div>
+                  <div className="text-xs opacity-75" style={{ color: brand.cream }}>Cash reserves</div>
+                </div>
+                <div className="text-center">
+                  <div style={{ color: brand.copper }} className="text-3xl font-bold mb-1">{metrics.stabilityScore}</div>
+                  <div style={{ color: brand.cream }} className="text-sm font-medium">Stability (30%)</div>
+                  <div className="text-xs opacity-75" style={{ color: brand.cream }}>Consistency</div>
+                </div>
+                <div className="text-center">
+                  <div style={{ color: brand.copper }} className="text-3xl font-bold mb-1">{metrics.runwayScore}</div>
+                  <div style={{ color: brand.cream }} className="text-sm font-medium">Runway (30%)</div>
+                  <div className="text-xs opacity-75" style={{ color: brand.cream }}>Months left</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'analytics' && (
+            <div className="space-y-6">
+              <div style={{ backgroundColor: '#fff', borderColor: brand.copper }} className="border rounded-lg p-6">
+                <h3 style={{ color: brand.teal, fontFamily: "'Alice', serif" }} className="text-lg font-semibold mb-4">Cashflow Key Performance Indicators</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {[
+                    { label: 'Burn Rate', value: metrics.burnRate > 0 ? formatCurrency(metrics.burnRate) + '/mo' : 'Positive' },
+                    { label: 'Working Capital Ratio', value: metrics.workingCapitalRatio.toFixed(2) + 'x' },
+                    { label: 'Cash Conversion', value: metrics.cashConversionEfficiency.toFixed(1) + '%' },
+                    { label: 'Revenue Growth', value: (metrics.revenueGrowthRate > 0 ? '+' : '') + metrics.revenueGrowthRate.toFixed(1) + '%' },
+                    { label: 'Avg Transaction', value: formatCurrency(metrics.totalRevenue / Math.max(rawData.filter(t => t.amount > 0).length, 1)) },
+                    { label: 'Cash Volatility', value: metrics.volatility + '%' },
+                    { label: 'Expense Ratio', value: (metrics.totalRevenue > 0 ? (metrics.totalExpenses / metrics.totalRevenue * 100) : 0).toFixed(1) + '%' },
+                    { label: 'Days Cash on Hand', value: Math.round(metrics.runway * 30) + ' days' },
+                  ].map((kpi, i) => (
+                    <div key={i} style={{ backgroundColor: brand.cream, borderLeft: `4px solid ${brand.copper}` }} className="p-4 rounded-lg">
+                      <div style={{ color: brand.turquoise }} className="text-xs font-medium uppercase tracking-wide mb-1">{kpi.label}</div>
+                      <div style={{ color: brand.teal }} className="text-xl font-bold">{kpi.value}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ backgroundColor: '#fff', borderColor: brand.copper }} className="border rounded-lg p-6">
+                <h3 style={{ color: brand.teal, fontFamily: "'Alice', serif" }} className="text-lg font-semibold mb-4">Top 5 Expenditures</h3>
+                {topAnalysis.topExpenses.length > 0 ? (
+                  <div className="space-y-4">
+                    <ResponsiveContainer width="100%" height={250}>
+                      <BarChart data={topAnalysis.topExpenses}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e0d8c8" />
+                        <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} tick={{ fontSize: 11, fill: brand.teal }}
+                               tickFormatter={(v) => v.length > 15 ? v.substring(0, 15) + '…' : v} />
+                        <YAxis tickFormatter={(v) => `${(v/1000).toFixed(1)}k`} tick={{ fill: brand.teal, fontSize: 11 }} />
+                        <Tooltip formatter={(value) => formatCurrency(value)} />
+                        <Bar dataKey="total" fill={brand.copper} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                    <div className="space-y-2">
+                      {topAnalysis.topExpenses.map((e, i) => (
+                        <div key={i} style={{ backgroundColor: brand.copperLight, borderLeft: `4px solid ${brand.copper}` }} className="flex justify-between items-center p-3 rounded">
+                          <div>
+                            <div style={{ color: brand.teal }} className="font-medium text-sm">{e.description}</div>
+                            <div className="text-xs text-gray-500">{e.count} transactions · Avg: {formatCurrency(e.avgAmount)}</div>
+                          </div>
+                          <div className="text-right">
+                            <div style={{ color: '#7a4035' }} className="font-bold">{formatCurrency(e.total)}</div>
+                            <div className="text-xs text-gray-500">{((e.total / metrics.totalExpenses) * 100).toFixed(1)}% of expenses</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : <p className="text-gray-500">No expense data available</p>}
+              </div>
+
+              <div style={{ backgroundColor: '#fff', borderColor: brand.copper }} className="border rounded-lg p-6">
+                <h3 style={{ color: brand.teal, fontFamily: "'Alice', serif" }} className="text-lg font-semibold mb-4">Top 5 Revenue Sources</h3>
+                {topAnalysis.topRevenues.length > 0 ? (
+                  <div className="space-y-4">
+                    <ResponsiveContainer width="100%" height={250}>
+                      <BarChart data={topAnalysis.topRevenues}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e0d8c8" />
+                        <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} tick={{ fontSize: 11, fill: brand.teal }}
+                               tickFormatter={(v) => v.length > 15 ? v.substring(0, 15) + '…' : v} />
+                        <YAxis tickFormatter={(v) => `${(v/1000).toFixed(1)}k`} tick={{ fill: brand.teal, fontSize: 11 }} />
+                        <Tooltip formatter={(value) => formatCurrency(value)} />
+                        <Bar dataKey="total" fill={brand.turquoise} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                    <div className="space-y-2">
+                      {topAnalysis.topRevenues.map((r, i) => (
+                        <div key={i} style={{ backgroundColor: brand.tealLight, borderLeft: `4px solid ${brand.turquoise}` }} className="flex justify-between items-center p-3 rounded">
+                          <div>
+                            <div style={{ color: brand.teal }} className="font-medium text-sm">{r.description}</div>
+                            <div className="text-xs text-gray-500">{r.count} transactions · Avg: {formatCurrency(r.avgAmount)}</div>
+                          </div>
+                          <div className="text-right">
+                            <div style={{ color: brand.teal }} className="font-bold">{formatCurrency(r.total)}</div>
+                            <div className="text-xs text-gray-500">{((r.total / metrics.totalRevenue) * 100).toFixed(1)}% of revenue</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : <p className="text-gray-500">No revenue data available</p>}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'overview' && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div style={{ backgroundColor: '#e8f5f0', borderColor: brand.turquoise }} className="p-4 rounded-lg border">
+                  <div style={{ color: brand.teal }} className="text-sm font-medium">Total Revenue</div>
+                  <div style={{ color: brand.teal }} className="text-2xl font-bold">{formatCurrency(metrics.totalRevenue)}</div>
+                </div>
+                <div style={{ backgroundColor: brand.copperLight, borderColor: brand.copper }} className="p-4 rounded-lg border">
+                  <div style={{ color: '#7a4035' }} className="text-sm font-medium">Total Expenses</div>
+                  <div style={{ color: '#7a4035' }} className="text-2xl font-bold">{formatCurrency(metrics.totalExpenses)}</div>
+                </div>
+                <div style={{ backgroundColor: metrics.netCashFlow >= 0 ? '#e8f5f0' : brand.copperLight, borderColor: metrics.netCashFlow >= 0 ? brand.turquoise : brand.copper }} className="p-4 rounded-lg border">
+                  <div style={{ color: brand.teal }} className="text-sm font-medium">Net Cash Flow</div>
+                  <div style={{ color: metrics.netCashFlow >= 0 ? brand.teal : '#7a4035' }} className="text-2xl font-bold">{formatCurrency(metrics.netCashFlow)}</div>
+                </div>
+                <div style={{ backgroundColor: brand.tealLight, borderColor: brand.teal }} className="p-4 rounded-lg border">
+                  <div style={{ color: brand.teal }} className="text-sm font-medium">Current Balance</div>
+                  <div style={{ color: metrics.currentBalance >= 0 ? brand.teal : '#7a4035' }} className="text-2xl font-bold">{formatCurrency(metrics.currentBalance)}</div>
+                </div>
+              </div>
+
+              <div style={{ backgroundColor: '#fff', borderColor: brand.copper }} className="border rounded-lg p-6">
+                <h3 style={{ color: brand.teal, fontFamily: "'Alice', serif" }} className="text-lg font-semibold mb-4">Monthly Performance</h3>
+                {monthlyData.length > 0 && (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={monthlyData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e0d8c8" />
+                      <XAxis dataKey="month" tick={{ fill: brand.teal, fontSize: 12 }} />
+                      <YAxis tick={{ fill: brand.teal, fontSize: 12 }} />
+                      <Tooltip formatter={(value) => formatCurrency(value)} />
+                      <Legend />
+                      <Bar dataKey="revenue" fill={brand.turquoise} name="Revenue" />
+                      <Bar dataKey="expenses" fill={brand.copper} name="Expenses" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'trends' && monthlyData.length > 0 && (
+            <div className="space-y-6">
+              <div style={{ backgroundColor: '#fff', borderColor: brand.copper }} className="border rounded-lg p-6">
+                <h3 style={{ color: brand.teal, fontFamily: "'Alice', serif" }} className="text-lg font-semibold mb-4">Cash Balance Trend</h3>
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={monthlyData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e0d8c8" />
+                    <XAxis dataKey="month" tick={{ fill: brand.teal, fontSize: 12 }} />
+                    <YAxis tick={{ fill: brand.teal, fontSize: 12 }} />
+                    <Tooltip formatter={(value) => formatCurrency(value)} />
+                    <Line type="monotone" dataKey="balance" stroke={brand.teal} strokeWidth={3} name="Balance" dot={{ fill: brand.copper }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+              <div style={{ backgroundColor: '#fff', borderColor: brand.copper }} className="border rounded-lg p-6">
+                <h3 style={{ color: brand.teal, fontFamily: "'Alice', serif" }} className="text-lg font-semibold mb-4">Revenue vs Expenses</h3>
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={monthlyData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e0d8c8" />
+                    <XAxis dataKey="month" tick={{ fill: brand.teal, fontSize: 12 }} />
+                    <YAxis tick={{ fill: brand.teal, fontSize: 12 }} />
+                    <Tooltip formatter={(value) => formatCurrency(value)} />
+                    <Legend />
+                    <Line type="monotone" dataKey="revenue" stroke={brand.turquoise} strokeWidth={2} name="Revenue" />
+                    <Line type="monotone" dataKey="expenses" stroke={brand.copper} strokeWidth={2} name="Expenses" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'recommendations' && (
+            <div className="space-y-6">
+              <div style={{ backgroundColor: brand.tealLight, borderColor: brand.teal }} className="border rounded-lg p-6">
+                <h3 style={{ color: brand.teal, fontFamily: "'Alice', serif" }} className="text-lg font-semibold mb-4">Strategic Score Improvement Plan</h3>
+
+                <div className="mb-6">
+                  <h4 style={{ color: brand.turquoise }} className="font-semibold mb-2">
+                    💧 Liquidity Score: {metrics.liquidityScore}/100
+                  </h4>
+                  <div className="space-y-1 text-sm" style={{ color: brand.teal }}>
+                    {metrics.liquidityScore < 60 && <>
+                      <div>• <strong>Immediate:</strong> Negotiate 30-60 day payment extensions with top 3 vendors</div>
+                      <div>• <strong>Week 1:</strong> Set up invoice factoring for immediate 80% cash on receivables</div>
+                      <div>• <strong>Month 1:</strong> Open business line of credit (target: {formatCurrency(metrics.avgMonthlyExpenses * 2)})</div>
+                    </>}
+                    <div>• <strong>Goal:</strong> Maintain {formatCurrency(metrics.avgMonthlyExpenses * 3)} minimum cash balance</div>
+                    <div>• <strong>Strategy:</strong> Implement 2/10 net 30 payment terms</div>
+                    <div>• <strong>Target:</strong> Reduce Days Sales Outstanding by 30%</div>
+                  </div>
+                </div>
+
+                <div className="mb-6">
+                  <h4 style={{ color: brand.turquoise }} className="font-semibold mb-2">
+                    📊 Stability Score: {metrics.stabilityScore}/100
+                  </h4>
+                  <div className="space-y-1 text-sm" style={{ color: brand.teal }}>
+                    {metrics.stabilityScore < 60 && <>
+                      <div>• <strong>Critical:</strong> Volatility ({metrics.volatility}%) is hurting predictability</div>
+                      <div>• <strong>Fix:</strong> Convert one-time clients to recurring contracts</div>
+                    </>}
+                    <div>• <strong>Revenue Mix:</strong> Target 60% recurring revenue within 6 months</div>
+                    <div>• <strong>Diversification:</strong> No single client exceeds 20% of revenue</div>
+                    <div>• <strong>Contracts:</strong> Move to 12-month terms with auto-renewal</div>
+                    <div>• <strong>Pricing:</strong> Implement annual 3-5% price increases</div>
+                  </div>
+                </div>
+
+                <div>
+                  <h4 style={{ color: brand.turquoise }} className="font-semibold mb-2">
+                    🚀 Runway Score: {metrics.runwayScore}/100 — {metrics.runway.toFixed(1)} months remaining
+                  </h4>
+                  <div className="space-y-1 text-sm" style={{ color: brand.teal }}>
+                    {metrics.runway < 6 && <div style={{ color: brand.copper }} className="font-bold">⚠️ Critical: Less than 6 months runway</div>}
+                    <div>• <strong>Target:</strong> Build to 6-12 months of operating expenses</div>
+                    <div>• <strong>Cost Optimization:</strong> Review top 5 expenses for 10-15% reduction</div>
+                    <div>• <strong>Revenue Acceleration:</strong> Target +{formatCurrency(metrics.avgMonthlyRevenue * 0.2)}/mo quick-win initiative</div>
+                    <div>• <strong>Capital Strategy:</strong> Prepare funding before runway hits 3 months</div>
+                  </div>
+                </div>
+              </div>
+
+              {topAnalysis.topExpenses.length > 0 && (
+                <div style={{ backgroundColor: brand.copperLight, borderColor: brand.copper }} className="border rounded-lg p-6">
+                  <h3 style={{ color: brand.teal, fontFamily: "'Alice', serif" }} className="font-semibold text-lg mb-4">Cost Reduction Opportunities</h3>
+                  <div className="space-y-3">
+                    {topAnalysis.topExpenses.slice(0, 3).map((expense, i) => (
+                      <div key={i} className="flex items-start space-x-3">
+                        <div style={{ backgroundColor: brand.copper, color: '#fff', minWidth: 32 }} className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold">{i + 1}</div>
+                        <div>
+                          <div style={{ color: brand.teal }} className="font-medium">{expense.description}</div>
+                          <div className="text-sm text-gray-600">{formatCurrency(expense.total)} · {expense.count} transactions</div>
+                          <div style={{ color: '#7a4035' }} className="text-sm mt-1">
+                            <strong>Action:</strong>
+                            {i === 0 && ' Renegotiate terms or find alternative vendor — target 15% reduction'}
+                            {i === 1 && ' Consolidate purchases for volume discount — target 10% savings'}
+                            {i === 2 && ' Review necessity and frequency — target 20% reduction'}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {topAnalysis.topRevenues.length > 0 && (
+                <div style={{ backgroundColor: brand.tealLight, borderColor: brand.turquoise }} className="border rounded-lg p-6">
+                  <h3 style={{ color: brand.teal, fontFamily: "'Alice', serif" }} className="font-semibold text-lg mb-4">Revenue Growth Strategies</h3>
+                  <div className="space-y-3">
+                    {topAnalysis.topRevenues.slice(0, 3).map((revenue, i) => (
+                      <div key={i} className="flex items-start space-x-3">
+                        <div style={{ backgroundColor: brand.turquoise, color: '#fff', minWidth: 32 }} className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold">{i + 1}</div>
+                        <div>
+                          <div style={{ color: brand.teal }} className="font-medium">{revenue.description}</div>
+                          <div className="text-sm text-gray-600">{formatCurrency(revenue.total)} · {revenue.count} transactions</div>
+                          <div style={{ color: brand.teal }} className="text-sm mt-1">
+                            <strong>Strategy:</strong>
+                            {i === 0 && ' Double down — increase marketing spend 50% in this segment'}
+                            {i === 1 && ' Upsell opportunity — introduce premium tier at 1.5x pricing'}
+                            {i === 2 && ' Scale up — hire dedicated account manager to grow by 40%'}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div style={{ backgroundColor: brand.cream, borderColor: brand.copper }} className="border rounded-lg p-6">
+                <h3 style={{ color: brand.teal, fontFamily: "'Alice', serif" }} className="font-semibold text-lg mb-4">Quick Win Action Items (This Week)</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <h4 style={{ color: brand.turquoise }} className="font-medium mb-2">Revenue Acceleration</h4>
+                    <ul style={{ color: brand.teal }} className="text-sm space-y-1">
+                      <li>☐ Call top 10 past clients for repeat business</li>
+                      <li>☐ Send payment reminders for overdue invoices</li>
+                      <li>☐ Offer 2% early payment discount</li>
+                      <li>☐ Launch flash sale or limited-time promotion</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <h4 style={{ color: brand.turquoise }} className="font-medium mb-2">Cost Optimization</h4>
+                    <ul style={{ color: brand.teal }} className="text-sm space-y-1">
+                      <li>☐ Cancel unused subscriptions and services</li>
+                      <li>☐ Negotiate terms with top 3 vendors</li>
+                      <li>☐ Switch to annual billing for 10-20% savings</li>
+                      <li>☐ Implement approval for purchases over {formatCurrency(500)}</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ backgroundColor: '#fff', borderColor: brand.copper }} className="border rounded-lg p-6">
+                <h3 style={{ color: brand.teal, fontFamily: "'Alice', serif" }} className="font-semibold text-lg mb-4">Industry Benchmark Targets</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm mb-4">
+                  {[
+                    { label: 'Gross Margin', target: '60–70%', current: ((metrics.netCashFlow / metrics.totalRevenue) * 100).toFixed(1) + '%' },
+                    { label: 'Working Capital Ratio', target: '1.5–2.0x', current: metrics.workingCapitalRatio.toFixed(2) + 'x' },
+                    { label: 'Cash Reserve', target: '3–6 months', current: metrics.runway.toFixed(1) + ' months' },
+                    { label: 'Revenue Growth (YoY)', target: '20–30%', current: metrics.revenueGrowthRate.toFixed(1) + '%' },
+                    { label: 'Expense Ratio', target: '< 80%', current: (metrics.totalRevenue > 0 ? (metrics.totalExpenses / metrics.totalRevenue * 100) : 0).toFixed(1) + '%' },
+                    { label: 'Cash Flow Volatility', target: '< 25%', current: metrics.volatility + '%' },
+                  ].map((b, i) => (
+                    <div key={i} style={{ backgroundColor: brand.cream, borderLeft: `4px solid ${brand.turquoise}` }} className="p-3 rounded">
+                      <div style={{ color: brand.turquoise }} className="text-xs font-medium uppercase tracking-wide">{b.label}</div>
+                      <div style={{ color: brand.teal }} className="font-bold text-lg">{b.target}</div>
+                      <div className="text-xs text-gray-500">Current: {b.current}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ backgroundColor: brand.tealLight, borderColor: brand.teal }} className="p-4 rounded border">
+                  <h4 style={{ color: brand.teal }} className="text-sm font-semibold mb-2">📚 Benchmark Sources & Assumptions</h4>
+                  <div className="text-xs text-gray-600 space-y-1">
+                    <p><strong>Data Sources:</strong> SaaS/SMB industry standards drawn from:</p>
+                    <ul className="ml-4 list-disc space-y-1">
+                      <li>B2B SaaS industry reports (Bessemer Venture Partners, OpenView)</li>
+                      <li>SMB financial health guidelines from the SBA and SCORE</li>
+                      <li>General GAAP accounting principles for small-to-medium businesses</li>
+                      <li>VC/investor expectations for growth-stage companies</li>
+                    </ul>
+                    <p className="mt-2"><strong>Key Assumptions:</strong> Service or product-based SMB/startup · Early to growth stage · Technology, professional services, or e-commerce industry · Normal economic conditions · US/Western markets</p>
+                    <p className="mt-2 italic">These are general guidelines. Actual targets vary by industry, business model, stage, and market. Consult a financial advisor for industry-specific benchmarks.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+    </div>
+  );
+};
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<MoneyPulseAnalyzer />);
+</script>
+
+</body>
+</html>
