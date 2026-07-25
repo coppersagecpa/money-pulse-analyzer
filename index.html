@@ -10,6 +10,7 @@
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
 <script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
   :root {
     --copper: #c99485;
@@ -326,12 +327,12 @@ const MoneyPulseAnalyzer = () => {
           headerRowIndex = i;
           const headers = lines[i].split(',').map(h => h.trim().toLowerCase());
           headers.forEach((header, idx) => {
-            if (header.includes('date')) dateCol = idx;
-            if (header.includes('amount')) amountCol = idx;
-            if (header.includes('description') || header.includes('desc')) descCol = idx;
-            if (header.includes('gross')) grossCol = idx;
-            if (header.includes('debit')) debitCol = idx;
-            if (header.includes('credit')) creditCol = idx;
+            if (dateCol === -1 && header.includes('date')) dateCol = idx;
+            if (amountCol === -1 && header.includes('amount')) amountCol = idx;
+            if (descCol === -1 && (header.includes('description') || header.includes('desc'))) descCol = idx;
+            if (grossCol === -1 && header.includes('gross')) grossCol = idx;
+            if (debitCol === -1 && header.includes('debit')) debitCol = idx;
+            if (creditCol === -1 && header.includes('credit')) creditCol = idx;
           });
           break;
         }
@@ -438,10 +439,11 @@ const MoneyPulseAnalyzer = () => {
     setDataQualityWarnings([]);
 
     try {
+      const isSpreadsheet = /\.(xlsx|xls)$/i.test(file.name);
       const reader = new FileReader();
-      reader.onload = (e) => {
+
+      const finishProcessing = (csvText) => {
         try {
-          const csvText = e.target.result;
           const { transactions, companyName: parsedCompany, reportPeriod: parsedPeriod, warnings } = parseCSVData(csvText);
           if (transactions.length === 0) {
             setError('No valid transactions found in the file. Please check the format.');
@@ -458,11 +460,32 @@ const MoneyPulseAnalyzer = () => {
           setIsProcessing(false);
         }
       };
+
+      reader.onload = (e) => {
+        if (isSpreadsheet) {
+          try {
+            const workbook = XLSX.read(e.target.result, { type: 'array', cellDates: true });
+            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+            const csvText = XLSX.utils.sheet_to_csv(firstSheet);
+            finishProcessing(csvText);
+          } catch (err) {
+            setError('Error reading Excel file: ' + err.message);
+            setIsProcessing(false);
+          }
+        } else {
+          finishProcessing(e.target.result);
+        }
+      };
       reader.onerror = () => {
         setError('Error reading file. Please try again.');
         setIsProcessing(false);
       };
-      reader.readAsText(file);
+
+      if (isSpreadsheet) {
+        reader.readAsArrayBuffer(file);
+      } else {
+        reader.readAsText(file);
+      }
     } catch (err) {
       setError('Error processing file: ' + err.message);
       setIsProcessing(false);
@@ -891,13 +914,13 @@ const MoneyPulseAnalyzer = () => {
             <div className="space-y-4">
               <input
                 type="file"
-                accept=".csv"
+                accept=".csv,.xlsx,.xls"
                 onChange={handleFileUpload}
                 disabled={isProcessing}
                 className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-teal-800 hover:file:bg-orange-100 disabled:opacity-50"
               />
               <p style={{ color: brand.turquoise }} className="text-sm">
-                {isProcessing ? 'Processing...' : 'Upload your CSV file with transaction data'}
+                {isProcessing ? 'Processing...' : 'Upload your CSV or Excel (.xlsx) file with transaction data'}
               </p>
             </div>
           </div>
